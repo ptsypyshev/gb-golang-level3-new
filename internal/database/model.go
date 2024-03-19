@@ -8,7 +8,7 @@ import (
 )
 
 type Link struct {
-	ID        primitive.ObjectID `bson:"id"`
+	ID        primitive.ObjectID `bson:"_id"`
 	Title     string             `bson:"title,omitempty"`
 	URL       string             `bson:"url"`
 	Images    []string           `bson:"images"`
