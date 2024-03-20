@@ -24,7 +24,7 @@ func Setup(ctx context.Context) (*Env, error) {
 	var cfg config.Config
 	env := &Env{}
 
-	if err := envconfig.Process(ctx, &cfg); err != nil { //nolint:typecheck
+	if err := envconfig.Process(ctx, &cfg); err != nil {
 		return nil, fmt.Errorf("env processing: %w", err)
 	}
 

@@ -17,7 +17,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	if err := runMain(ctx); err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 }
 
