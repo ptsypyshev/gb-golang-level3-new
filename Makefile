@@ -1,36 +1,53 @@
-APP=friends
+APP=umanager
 SHELL := /bin/bash
 DOCKER_COMPOSE_FILE=docker-compose.yaml
-# GO_SERVICE=friends1 friends2
 
-.PHONY: help
-help: Makefile ## Show this help
-	@echo
-	@echo "Choose a command run in "$(APP)":"
-	@echo
-	@fgrep -h "##" $(MAKEFILE_LIST) | sed -e 's/\(\:.*\#\#\)/\:\ /' | fgrep -v fgrep | sed -e 's/\\$$//' | sed -e 's/##//'
+.PHONY: build
+build:
+	go build -o bin/links-srv cmd/links-srv/main.go
+	go build -o bin/users-srv cmd/users-srv/main.go
+	go build -o bin/api-srv cmd/api-gw/main.go
 
-build-u-srv: ## Build users-srv
-	go build -o bin/usrv cmd/users-srv/main.go
+.PHONY: clean
+clean:
+	rm -rf bin/
 
-build-l-srv: ## Build users-srv
-	go build -o bin/lsrv cmd/links-srv/main.go
-
+.PHONY: lint
 lint:
-	go mod tidy
-	golangci-lint run ./...
+	golangci-lint run --timeout 5m -v ./...
 
-test: ## Test app
-	go test -failfast -count=1 -v ./... -coverpkg=./... -coverprofile=coverpkg.out
+.PHONY: genid
+genid:
+	go run cmd/genid/main.go
 
-migrate-create: ## Migrate DB Create New: use NAME=next_migration_name make migrate-create
-	migrate create -ext sql -dir migrations -seq $(NAME)
+.PHONY: generate
+generate:
+	protoc --go_out=pkg/pb --go_opt=paths=source_relative --go-grpc_out=pkg/pb --go-grpc_opt=paths=source_relative \
+	--proto_path=./pkg/pb ./pkg/pb/common.proto
 
-migrate-up: ## Migrate DB UP
-	migrate -path migrations -database postgres://postgres:postgres@localhost:5434/final?sslmode=disable up
+	protoc --go_out=pkg/pb --go_opt=paths=source_relative --go-grpc_out=pkg/pb --go-grpc_opt=paths=source_relative \
+	--proto_path=./pkg/pb ./pkg/pb/users.proto
 
-migrate-down: ## Migrate DB DOWN
-	migrate -path migrations -database postgres://postgres:postgres@localhost:5434/final?sslmode=disable down
+	protoc --go_out=pkg/pb --go_opt=paths=source_relative --go-grpc_out=pkg/pb --go-grpc_opt=paths=source_relative \
+	--proto_path=./pkg/pb ./pkg/pb/links.proto
+
+	go generate ./...
+
+.PHONY: install
+install:
+	go get google.golang.org/protobuf/cmd/protoc-gen-go
+	go get google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@1.56.2
+
+.PHONY: test
+test:
+	go test -short ./...
+
+.PHONY: integration
+integration:
+	go test -race ./...
 
 start: ## Start all deployed services
 	docker-compose -f $(DOCKER_COMPOSE_FILE) up -d
@@ -38,8 +55,11 @@ start: ## Start all deployed services
 stop: ## Stop all deployed services
 	docker-compose -f $(DOCKER_COMPOSE_FILE) stop
 
-# redeploy: ## Redeploy go services	
-# 	docker-compose -f $(DOCKER_COMPOSE_FILE) stop $(GO_SERVICE); \
-# 	docker-compose -f $(DOCKER_COMPOSE_FILE) rm -f $(GO_SERVICE); \
-# 	docker-compose -f $(DOCKER_COMPOSE_FILE) up --build -d $(GO_SERVICE); \
-# 	docker-compose -f $(DOCKER_COMPOSE_FILE) restart proxy; \
+.PHONY: migrate-up
+migrate-up:
+	 migrate -source "file://./migrations" -database "postgres://localhost:5434/users?sslmode=disable&user=postgres&password=postgres" up
+
+.PHONY: migrate-down
+migrate-down:
+	 migrate -source "file://./migrations" -database \
+	 "postgres://localhost:5434/users?sslmode=disable&user=postgres&password=postgres" down
