@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
+	"net"
 	"os/signal"
+	"sync"
 	"syscall"
 
-	"github.com/google/uuid"
-
-	"github.com/ptsypyshev/gb-golang-level3-new/internal/database/users"
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/env"
 )
 
@@ -17,7 +17,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	if err := runMain(ctx); err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
 }
 
@@ -26,28 +26,35 @@ func runMain(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("setup.Setup: %w", err)
 	}
-	_ = e
-	create, err := e.UsersRepository.Create(
-		ctx, users.CreateUserReq{
-			ID:       uuid.New(),
-			Username: "random",
-			Password: "password",
-		},
-	)
-	if err != nil {
-		return err
-	}
 
-	found, err := e.UsersRepository.FindByID(ctx, create.ID)
-	if err != nil {
-		return err
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
-	foundBy, err := e.UsersRepository.FindByUsername(ctx, "random")
-	if err != nil {
-		return err
-	}
+	grpcServer := e.UsersGRPCServer
 
-	fmt.Println(create, found, foundBy)
+	go func() {
+		<-ctx.Done()
+		// если посылаем сигнал завершения то завершаем работу нашего сервера
+		grpcServer.Stop()
+	}()
+
+	go func() {
+		defer wg.Done()
+		slog.Info(fmt.Sprintf("users grpc was started %s", e.Config.UsersService.GRPCServer.Addr))
+
+		lis, err := net.Listen("tcp", e.Config.UsersService.GRPCServer.Addr)
+		if err != nil {
+			slog.Error("net Listen", slog.Any("err", err))
+			return
+		}
+
+		if err := grpcServer.Serve(lis); err != nil {
+			slog.Error("net Listen", slog.Any("err", err))
+			return
+		}
+	}()
+
+	wg.Wait()
+
 	return nil
 }
