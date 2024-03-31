@@ -9,7 +9,7 @@ import (
 	"github.com/ptsypyshev/gb-golang-level3-new/pkg/api/apiv1"
 )
 
-// Router has base path /api/v1
+// Router has base path /api/v1.
 func Router(handler apiv1.ServerInterface) http.Handler {
 	router := chi.NewRouter()
 	router.Mount(

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
-	"slices"
 
+	"github.com/ptsypyshev/gb-golang-level3-new/pkg/api/apiv1"
 	"github.com/ptsypyshev/gb-golang-level3-new/pkg/pb"
 )
 
@@ -36,7 +37,10 @@ func (h *linksHandler) GetLinks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		slog.Error("GetLinks handler", slog.Any("err", err))
+	}
 }
 
 func (h *linksHandler) PostLinks(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +48,7 @@ func (h *linksHandler) PostLinks(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
-	var linkReq pb.CreateLinkRequest
+	var linkReq apiv1.LinkCreate
 	err := json.NewDecoder(r.Body).Decode(&linkReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -56,7 +60,16 @@ func (h *linksHandler) PostLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.client.CreateLink(ctx, &linkReq)
+	req := &pb.CreateLinkRequest{
+		Id:     linkReq.Id,
+		Images: linkReq.Images,
+		Tags:   linkReq.Tags,
+		Title:  linkReq.Title,
+		UserId: linkReq.UserId,
+		Url:    linkReq.Url,
+	}
+
+	_, err = h.client.CreateLink(ctx, req)
 	if err != nil {
 		http.Error(w, "500 - Cannot create Link", http.StatusInternalServerError)
 		return
@@ -107,7 +120,10 @@ func (h *linksHandler) GetLinksId(w http.ResponseWriter, r *http.Request, id str
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		slog.Error("GetLinksId handler", slog.Any("err", err))
+	}
 }
 
 func (h *linksHandler) PutLinksId(w http.ResponseWriter, r *http.Request, id string) {
@@ -115,40 +131,20 @@ func (h *linksHandler) PutLinksId(w http.ResponseWriter, r *http.Request, id str
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
-	var linkReq pb.UpdateLinkRequest
+	var linkReq apiv1.LinkCreate
 	err := json.NewDecoder(r.Body).Decode(&linkReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	req := &pb.GetLinkRequest{Id: r.PathValue("id")}
-
-	link, err := h.client.GetLink(ctx, req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("404 - Link with ID %s is not found", r.PathValue("id")), http.StatusNotFound)
-		return
-	}
-
-	updReq := &pb.UpdateLinkRequest{Id: link.Id}
-	if link.Title != linkReq.Title {
-		updReq.Title = linkReq.Title
-	}
-
-	if link.Url != linkReq.Url {
-		updReq.Url = linkReq.Url
-	}
-
-	if slices.Compare(link.Images, linkReq.Images) == 0 {
-		updReq.Images = linkReq.Images
-	}
-
-	if slices.Compare(link.Tags, linkReq.Tags) == 0 {
-		updReq.Tags = linkReq.Tags
-	}
-
-	if link.UserId != linkReq.UserId {
-		updReq.UserId = linkReq.UserId
+	updReq := &pb.UpdateLinkRequest{
+		Id:     linkReq.Id,
+		Title:  linkReq.Title,
+		Url:    linkReq.Url,
+		Images: linkReq.Images,
+		Tags:   linkReq.Tags,
+		UserId: linkReq.UserId,
 	}
 
 	_, err = h.client.UpdateLink(ctx, updReq)
@@ -156,6 +152,8 @@ func (h *linksHandler) PutLinksId(w http.ResponseWriter, r *http.Request, id str
 		http.Error(w, "500 - Cannot update Link", http.StatusInternalServerError)
 		return
 	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *linksHandler) GetLinksUserUserID(w http.ResponseWriter, r *http.Request, userID string) {
@@ -183,5 +181,8 @@ func (h *linksHandler) GetLinksUserUserID(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		slog.Error("GetLinksUserUserID handler", slog.Any("err", err))
+	}
 }

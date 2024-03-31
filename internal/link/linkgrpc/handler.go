@@ -2,23 +2,35 @@ package linkgrpc
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/database"
+	"github.com/ptsypyshev/gb-golang-level3-new/internal/link/models"
 	"github.com/ptsypyshev/gb-golang-level3-new/pkg/pb"
 )
 
+const ContentTypeJSON = "application/json"
+
 var _ pb.LinkServiceServer = (*Handler)(nil)
 
-func New(linksRepository linksRepository, timeout time.Duration) *Handler {
-	return &Handler{linksRepository: linksRepository, timeout: timeout}
+func New(linksRepository linksRepository, timeout time.Duration, publisher amqpPublisher, queueName string) *Handler {
+	return &Handler{
+		linksRepository: linksRepository,
+		pub:             publisher,
+		queueName:       queueName,
+		timeout:         timeout,
+	}
 }
 
 type Handler struct {
 	pb.UnimplementedLinkServiceServer
 	linksRepository linksRepository
+	pub             amqpPublisher
+	queueName       string
 	timeout         time.Duration
 }
 
@@ -44,8 +56,6 @@ func (h Handler) GetLinkByUserID(ctx context.Context, id *pb.GetLinksByUserId) (
 	}
 	return &pb.ListLinkResponse{Links: res}, err
 }
-
-func (h Handler) mustEmbedUnimplementedLinkServiceServer() {}
 
 func (h Handler) CreateLink(ctx context.Context, request *pb.CreateLinkRequest) (*pb.Empty, error) {
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
@@ -74,7 +84,24 @@ func (h Handler) CreateLink(ctx context.Context, request *pb.CreateLinkRequest) 
 		Tags:   request.Tags,
 		UserID: request.UserId,
 	}
-	_, err = h.linksRepository.Create(ctx, req)
+
+	link, err := h.linksRepository.Create(ctx, req)
+	if err != nil {
+		return &pb.Empty{}, err
+	}
+
+	// Сообщение которое отправляем в очередь
+	data, err := json.Marshal(models.Message{ID: link.ID.Hex()})
+	if err != nil {
+		return &pb.Empty{}, err
+	}
+
+	err = h.pub.Publish("", h.queueName, false, false, amqp.Publishing{
+		ContentType: ContentTypeJSON,
+		Body:        data,
+		Timestamp:   time.Now(),
+	})
+
 	return &pb.Empty{}, err
 }
 

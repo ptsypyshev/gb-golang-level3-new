@@ -20,7 +20,7 @@ type Repository struct {
 	timeout time.Duration
 }
 
-// Create этот метод создает пользователя и обновляет его, если такой id уже существует, используйте его для обновления
+// Create этот метод создает пользователя и обновляет его, если такой id уже существует, используйте его для обновления.
 func (r *Repository) Create(ctx context.Context, req database.CreateUserReq) (database.User, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
