@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 	once.Do(
 		func() {
 			var cfg config.Config
-			if err := envconfig.Process(ctx, &cfg); err != nil { //nolint:typecheck
+			if err := envconfig.Process(ctx, &cfg); err != nil {
 				log.Fatalf("env processing: %v", err)
 			}
 
@@ -59,11 +59,9 @@ func TestMain(m *testing.M) {
 			linksRepo = New(linksDBConn.Database("links"), 5*time.Second)
 		},
 	)
-	defer func() {
-		_ = client.Disconnect(ctx)
-	}()
 
 	exitCode := m.Run()
+	_ = client.Disconnect(ctx)
 	os.Exit(exitCode)
 }
 

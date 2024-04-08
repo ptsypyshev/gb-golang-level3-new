@@ -34,6 +34,14 @@ services:
     ports:
       - 27018:27017
 
+  rabbitmq-final:
+    hostname: 'rabbitmq-final'
+    container_name: 'rabbitmq-final'
+    image: 'rabbitmq:3.13-management-alpine'
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+
   # proxy:
   #   image: nginx:1.23.4
   #   container_name: 'proxy'

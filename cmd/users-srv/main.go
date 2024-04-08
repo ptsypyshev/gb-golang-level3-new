@@ -9,9 +9,12 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/env"
 )
+
+const ShutdownTimeout = 3 * time.Second
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -22,7 +25,7 @@ func main() {
 }
 
 func runMain(ctx context.Context) error {
-	e, err := env.Setup(ctx)
+	e, c, err := env.Setup(ctx)
 	if err != nil {
 		return fmt.Errorf("setup.Setup: %w", err)
 	}
@@ -55,6 +58,11 @@ func runMain(ctx context.Context) error {
 	}()
 
 	wg.Wait()
+
+	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout) //nolint:contextcheck
+	defer cancel()
+
+	c.Close(ctx)
 
 	return nil
 }

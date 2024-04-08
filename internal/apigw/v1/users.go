@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -40,7 +41,10 @@ func (h *usersHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		slog.Error("GetUsers handler", slog.Any("err", err))
+	}
 }
 
 func (h *usersHandler) PostUsers(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +115,10 @@ func (h *usersHandler) GetUsersId(w http.ResponseWriter, r *http.Request, id str
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	w.Write(b)
+	_, err = w.Write(b)
+	if err != nil {
+		slog.Error("GetUsersId handler", slog.Any("err", err))
+	}
 }
 
 func (h *usersHandler) PutUsersId(w http.ResponseWriter, r *http.Request, id string) {

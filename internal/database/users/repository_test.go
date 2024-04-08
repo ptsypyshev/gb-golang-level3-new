@@ -57,7 +57,7 @@ func TestMain(m *testing.M) {
 	once.Do(
 		func() {
 			var cfg config.Config
-			if err := envconfig.Process(ctx, &cfg); err != nil { //nolint:typecheck
+			if err := envconfig.Process(ctx, &cfg); err != nil {
 				log.Fatalf("env processing: %v", err)
 			}
 

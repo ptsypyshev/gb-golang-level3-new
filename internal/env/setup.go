@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sethvargo/go-envconfig"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,23 +21,26 @@ import (
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/database/users"
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/env/config"
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/link/linkgrpc"
+	"github.com/ptsypyshev/gb-golang-level3-new/internal/link/stories/linkupdater"
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/user/usergrpc"
+
 	"github.com/ptsypyshev/gb-golang-level3-new/pkg/pb"
 )
 
 type Env struct {
 	Config          config.Config
-	ApiGWHTTPServer *http.Server
+	APIGWHTTPServer *http.Server
 	LinksGRPCServer *grpc.Server
 	UsersGRPCServer *grpc.Server
+	LinkUpdater     *linkupdater.Story
 }
 
-func Setup(ctx context.Context) (*Env, error) {
+func Setup(ctx context.Context) (*Env, *Closer, error) {
 	var cfg config.Config
 	env := &Env{}
 
-	if err := envconfig.Process(ctx, &cfg); err != nil { //nolint:typecheck
-		return nil, fmt.Errorf("env processing: %w", err)
+	if err := envconfig.Process(ctx, &cfg); err != nil {
+		return nil, nil, fmt.Errorf("env processing: %w", err)
 	}
 
 	linksDBConn, err := mongo.Connect(
@@ -48,12 +52,28 @@ func Setup(ctx context.Context) (*Env, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("mongo.Connect: %w", err)
+		return nil, nil, fmt.Errorf("mongo.Connect: %w", err)
 	}
 
 	usersDBConn, err := pgxpool.Connect(ctx, cfg.UsersService.Postgres.ConnectionURL())
 	if err != nil {
-		return nil, fmt.Errorf("pgxpool Connect: %w", err)
+		return nil, nil, fmt.Errorf("pgxpool Connect: %w", err)
+	}
+
+	amqpConn, err := amqp.Dial(cfg.LinksService.AMQP.String())
+	if err != nil {
+		return nil, nil, fmt.Errorf("amqp Dial: %w", err)
+	}
+
+	amqpChannel, err := amqpConn.Channel()
+	if err != nil {
+		return nil, nil, fmt.Errorf("amqp Channel: %w", err)
+	}
+
+	// задекларируйте очередь
+	_, err = amqpChannel.QueueDeclare(cfg.LinksService.AMQP.QueueName, false, false, false, false, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("QueueDeclare: %w", err)
 	}
 
 	usersRepository := users.New(usersDBConn, 5*time.Second) // вынести в конфиг duration
@@ -63,7 +83,7 @@ func Setup(ctx context.Context) (*Env, error) {
 	)
 
 	{
-		handler := linkgrpc.New(linksRepository, cfg.LinksService.GRPCServer.Timeout)
+		handler := linkgrpc.New(linksRepository, cfg.LinksService.GRPCServer.Timeout, amqpChannel, cfg.LinksService.AMQP.QueueName)
 
 		s := grpc.NewServer()
 		reflection.Register(s) // этот код нужен для дебаггинга
@@ -88,20 +108,20 @@ func Setup(ctx context.Context) (*Env, error) {
 
 	// Клиент для осуществления запросов в users service
 	usersClientConn, err := grpc.DialContext(
-		ctx, cfg.ApiGWService.UsersClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		ctx, cfg.APIGWService.UsersClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("grpc DialContext: %w", err)
+		return nil, nil, fmt.Errorf("grpc DialContext: %w", err)
 	}
 
 	usersClient := pb.NewUserServiceClient(usersClientConn)
 
 	// Клиент для осуществления запросов в links service
 	linksClientConn, err := grpc.DialContext(
-		ctx, cfg.ApiGWService.LinksClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		ctx, cfg.APIGWService.LinksClientAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("grpc DialContext: %w", err)
+		return nil, nil, fmt.Errorf("grpc DialContext: %w", err)
 	}
 
 	linksClient := pb.NewLinkServiceClient(linksClientConn)
@@ -112,16 +132,19 @@ func Setup(ctx context.Context) (*Env, error) {
 	router := routes.Router(handler)
 
 	apiGWServer := &http.Server{
-		Addr:              cfg.ApiGWService.Addr,
+		Addr:              cfg.APIGWService.Addr,
 		Handler:           router,
-		ReadTimeout:       cfg.ApiGWService.ReadTimeout,
-		ReadHeaderTimeout: cfg.ApiGWService.ReadTimeout,
-		WriteTimeout:      cfg.ApiGWService.WriteTimeout,
-		IdleTimeout:       cfg.ApiGWService.ReadTimeout,
+		ReadTimeout:       cfg.APIGWService.ReadTimeout,
+		ReadHeaderTimeout: cfg.APIGWService.ReadTimeout,
+		WriteTimeout:      cfg.APIGWService.WriteTimeout,
+		IdleTimeout:       cfg.APIGWService.ReadTimeout,
 	}
 
-	env.ApiGWHTTPServer = apiGWServer
-	env.Config = cfg
+	linkUpdaterStory := linkupdater.New(linksRepository, amqpChannel, cfg.LinksService.AMQP.QueueName)
 
-	return env, nil
+	env.APIGWHTTPServer = apiGWServer
+	env.Config = cfg
+	env.LinkUpdater = linkUpdaterStory
+
+	return env, NewCloser(usersDBConn, linksDBConn, amqpConn, amqpChannel), nil
 }
