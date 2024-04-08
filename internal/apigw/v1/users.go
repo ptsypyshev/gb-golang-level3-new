@@ -24,18 +24,19 @@ type usersHandler struct {
 }
 
 func (h *usersHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
-	// TODO implement me - implemented
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
 	users, err := h.client.ListUsers(ctx, &pb.Empty{})
 	if err != nil {
+		slog.Error("cannot get list of Users at GetUsers handler", slog.Any("err", err))
 		http.Error(w, "500 - Cannot get Users", http.StatusInternalServerError)
 		return
 	}
 
 	b, err := json.Marshal(users)
 	if err != nil {
+		slog.Error("cannot marshal list of Users to JSON at GetUsers handler", slog.Any("err", err))
 		http.Error(w, "500 - Cannot marshal Users", http.StatusInternalServerError)
 		return
 	}
@@ -43,29 +44,31 @@ func (h *usersHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	_, err = w.Write(b)
 	if err != nil {
-		slog.Error("GetUsers handler", slog.Any("err", err))
+		slog.Error("cannot write response at GetUsers handler", slog.Any("err", err))
 	}
 }
 
 func (h *usersHandler) PostUsers(w http.ResponseWriter, r *http.Request) {
-	// TODO implement me - implemented
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
 	var userReq pb.CreateUserRequest
 	err := json.NewDecoder(r.Body).Decode(&userReq)
 	if err != nil {
+		slog.Error("cannot decode request body at PostUsers handler", slog.Any("err", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if userReq.Id != "" || userReq.Username == "" || userReq.Password == "" {
+		slog.Error("invalid body params at PostUsers handler", slog.Any("err", err))
 		http.Error(w, "bad request body", http.StatusBadRequest)
 		return
 	}
 
 	_, err = h.client.CreateUser(ctx, &userReq)
 	if err != nil {
+		slog.Error("cannot create User at PostUsers handler", slog.Any("err", err))
 		http.Error(w, "500 - Cannot create User", http.StatusInternalServerError)
 		return
 	}
@@ -74,7 +77,6 @@ func (h *usersHandler) PostUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *usersHandler) DeleteUsersId(w http.ResponseWriter, r *http.Request, id string) {
-	// TODO implement me - implemented
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
@@ -82,6 +84,7 @@ func (h *usersHandler) DeleteUsersId(w http.ResponseWriter, r *http.Request, id 
 
 	_, err := h.client.GetUser(ctx, req)
 	if err != nil {
+		slog.Info("cannot get User at DeleteUsersId handler", slog.Any("err", err))
 		http.Error(w, fmt.Sprintf("404 - User with ID %s is not found", r.PathValue("id")), http.StatusNotFound)
 		return
 	}
@@ -89,6 +92,7 @@ func (h *usersHandler) DeleteUsersId(w http.ResponseWriter, r *http.Request, id 
 	delReq := &pb.DeleteUserRequest{Id: r.PathValue("id")}
 	_, err = h.client.DeleteUser(ctx, delReq)
 	if err != nil {
+		slog.Error("cannot delete User at DeleteUsersId handler", slog.Any("err", err))
 		http.Error(w, "500 - Cannot create User", http.StatusInternalServerError)
 		return
 	}
@@ -97,7 +101,6 @@ func (h *usersHandler) DeleteUsersId(w http.ResponseWriter, r *http.Request, id 
 }
 
 func (h *usersHandler) GetUsersId(w http.ResponseWriter, r *http.Request, id string) {
-	// TODO implement me - implemented
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
@@ -105,30 +108,33 @@ func (h *usersHandler) GetUsersId(w http.ResponseWriter, r *http.Request, id str
 
 	user, err := h.client.GetUser(ctx, req)
 	if err != nil {
+		slog.Info("cannot get User at GetUsersId handler", slog.Any("err", err))
 		http.Error(w, fmt.Sprintf("404 - User with ID %s is not found", r.PathValue("id")), http.StatusNotFound)
 		return
 	}
 
 	b, err := json.Marshal(user)
 	if err != nil {
+		slog.Error("cannot marshal User to JSON at GetUsersId handler", slog.Any("err", err))
 		http.Error(w, "500 - Cannot marshal User", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Add("Content-Type", "application/json")
 	_, err = w.Write(b)
 	if err != nil {
-		slog.Error("GetUsersId handler", slog.Any("err", err))
+		slog.Error("cannot write response at GetUsersId handler", slog.Any("err", err))
 	}
 }
 
 func (h *usersHandler) PutUsersId(w http.ResponseWriter, r *http.Request, id string) {
-	// TODO implement me - implemented
 	ctx, cancel := context.WithTimeout(r.Context(), ctxTimeout)
 	defer cancel()
 
 	var userReq pb.UpdateUserRequest
 	err := json.NewDecoder(r.Body).Decode(&userReq)
 	if err != nil {
+		slog.Error("cannot decode request body at PutUsersId handler", slog.Any("err", err))
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -137,6 +143,7 @@ func (h *usersHandler) PutUsersId(w http.ResponseWriter, r *http.Request, id str
 
 	user, err := h.client.GetUser(ctx, req)
 	if err != nil {
+		slog.Error("cannot get User at PutUsersId handler", slog.Any("err", err))
 		http.Error(w, fmt.Sprintf("404 - User with ID %s is not found", r.PathValue("id")), http.StatusNotFound)
 		return
 	}
@@ -152,6 +159,7 @@ func (h *usersHandler) PutUsersId(w http.ResponseWriter, r *http.Request, id str
 
 	_, err = h.client.CreateUser(ctx, updReq)
 	if err != nil {
+		slog.Error("cannot create User at PutUsersId handler", slog.Any("err", err))
 		http.Error(w, "500 - Cannot update User", http.StatusInternalServerError)
 		return
 	}
