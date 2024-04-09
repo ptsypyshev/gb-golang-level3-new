@@ -43,11 +43,11 @@ install:
 
 .PHONY: test
 test:
-	go test -short ./...
+	go test -short -count=1 ./...
 
 .PHONY: integration
 integration:
-	go test -race ./...
+	go test -v -count=1 ./...
 
 start: ## Start all deployed services
 	docker-compose -f $(DOCKER_COMPOSE_FILE) up -d

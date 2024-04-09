@@ -108,5 +108,5 @@ type APIGWService struct {
 	ReadTimeout     time.Duration `env:"READ_TIMEOUT,default=30s"`
 	WriteTimeout    time.Duration `env:"WRITE_TIMEOUT,default=30s"`
 	UsersClientAddr string        `env:"USERS_CLIENT_ADDR,default=:52000"`
-	LinksClientAddr string        `env:"USERS_CLIENT_ADDR,default=:51000"`
+	LinksClientAddr string        `env:"LINKS_CLIENT_ADDR,default=:51000"`
 }

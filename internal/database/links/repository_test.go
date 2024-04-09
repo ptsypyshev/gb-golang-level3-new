@@ -20,6 +20,7 @@ import (
 
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/database"
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/env/config"
+	"github.com/ptsypyshev/gb-golang-level3-new/tests"
 )
 
 var (
@@ -30,6 +31,8 @@ var (
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
+	tests.SetupEnv()
+	mongoPool, mongoRes := tests.StartMongo()
 
 	once.Do(
 		func() {
@@ -62,6 +65,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := m.Run()
 	_ = client.Disconnect(ctx)
+	tests.Stop(mongoPool, mongoRes)
 	os.Exit(exitCode)
 }
 
