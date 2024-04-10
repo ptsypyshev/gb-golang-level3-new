@@ -21,6 +21,7 @@ import (
 
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/database"
 	"github.com/ptsypyshev/gb-golang-level3-new/internal/env/config"
+	"github.com/ptsypyshev/gb-golang-level3-new/tests"
 )
 
 var (
@@ -53,12 +54,19 @@ func generateUser() (database.CreateUserReq, error) {
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
+	tests.SetupEnv()
+	pgPool, pgRes := tests.StartPG()
 
 	once.Do(
 		func() {
 			var cfg config.Config
 			if err := envconfig.Process(ctx, &cfg); err != nil {
 				log.Fatalf("env processing: %v", err)
+			}
+
+			err := tests.CreateSchema(cfg.UsersService.Postgres.ConnectionURL())
+			if err != nil {
+				log.Fatal(err)
 			}
 
 			usersDBConn, err := pgxpool.Connect(ctx, cfg.UsersService.Postgres.ConnectionURL())
@@ -73,6 +81,7 @@ func TestMain(m *testing.M) {
 	)
 	exitCode := m.Run()
 	conn.Close()
+	tests.Stop(pgPool, pgRes)
 	os.Exit(exitCode)
 }
 
